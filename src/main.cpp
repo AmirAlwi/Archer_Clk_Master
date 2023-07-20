@@ -6,6 +6,10 @@
 #include <Adafruit_SSD1306.h> 
 #include <Adafruit_GFX.h>
 #include <Wire.h>
+#include "AudioGeneratorAAC.h"
+#include "AudioOutputI2S.h"
+#include "AudioFileSourcePROGMEM.h"
+#include "buzeraac.h"
 
 #define ROW 4
 #define COLUMN 4
@@ -31,6 +35,9 @@ enum seq {
 uint8_t broadcastAddress[] = {0x3C,0x61,0x05,0x03,0x50,0xF0}; // 0xC4,0x5B,0xBE,0x3F,0x4C,0xD8
 Adafruit_SSD1306 display(128, 64, &Wire, -1);
 esp_now_peer_info_t peerInfo;
+AudioFileSourcePROGMEM *in;
+AudioGeneratorAAC *aac;
+AudioOutputI2S *out;
 
 typedef struct struct_message
 {
@@ -62,8 +69,15 @@ Keypad keypad = Keypad(makeKeymap(keys), pin_rows, pin_column, ROW, COLUMN);
 void onDataSent(const uint8_t *mac_addr, esp_now_send_status_t _status)
 {
 	Serial.println(_status == ESP_NOW_SEND_SUCCESS ? "Send OK" : "Send Fail");
+	if(!_status)
+		Serial.println(millis()-millis());
 	success = _status;
 	isreading = true;
+}
+
+void onDataRecv()
+{
+
 }
 
 void get_timer(int _input)
@@ -238,6 +252,15 @@ void setup()
 {
 	Serial.begin(115200);
 
+	audioLogger = &Serial;
+ 	in = new AudioFileSourcePROGMEM(buzzer, sizeof(buzzer));
+	aac = new AudioGeneratorAAC();
+	out = new AudioOutputI2S();
+	// out->SetPinout(26,25,27);
+	out->SetGain(0.125);
+	
+    delay(1000);
+  
 	oled_init();
 
 	WiFi.mode(WIFI_MODE_STA);
@@ -319,12 +342,13 @@ void check_conn()
 	ref_time = millis()	;
 }
 
+unsigned long rt = 0;
 void loop()
 {
   // read the state of the switch into a local variable:
 	char reading = 0;
 	int datacp = 0;
-
+	
 	if (status == idle){
 		while(status==idle){
 			
@@ -333,8 +357,8 @@ void loop()
 			get_cmd(reading, &datacp);
 
 			if(reading){
-				esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *)&mydata, sizeof(mydata)); 	
 				ref_time = millis();
+				esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *)&mydata, sizeof(mydata)); 	
 			}
 
 			if (reading == 0 && (millis() - ref_time) > 5000)
@@ -377,6 +401,11 @@ void loop()
 
 	}else if (status == busy){
 		lastmillis = millis();
+
+		display.clearDisplay();
+		disp_time(duration);
+		display_set();
+
 		while(status == busy){
 			reading = keypad.getKey();
 			mydata.data = reading;
@@ -407,7 +436,12 @@ void loop()
 						timer = start;
 						Serial.println("start");
 					}
+
+					display.clearDisplay();
+					disp_time(duration);
+					display_set();
 				} else if(datacp == 15 && timer == stop){ //reset
+					Serial.println("reset");
 					if(player==PAB)
 						player=PCD;
 					else if(player==PCD)
@@ -428,7 +462,21 @@ void loop()
 			TIMER:
 			if ((timer == start )&& (millis()-lastmillis >= 1000)){
 
-				if (countdown <= 0){	
+				lastmillis = millis();
+				if (countdown < 1){	
+					for (int i =0 ; i <3; ){
+						while (aac->isRunning()) {
+							if(!aac->loop()) {
+								aac->stop();
+								i ++;
+							}
+						}	//else {		
+							delay(600);
+							in = new AudioFileSourcePROGMEM(buzzer, sizeof(buzzer));
+							aac->begin(in, out);
+						//}
+					}
+					aac->stop();
 					timer = stop;
 					status = idle;
 					countdown = duration;
@@ -444,18 +492,29 @@ void loop()
 					display_set();
 					break;
 				}
-
+				SKIP:
 				display.clearDisplay();
 				if (start_duration < 1){
 					countdown = countdown - 1;
 					disp_time(countdown);
 				} else {
+					if(start_duration > 8 || start_duration == 1){
+						in = new AudioFileSourcePROGMEM(buzzer, sizeof(buzzer));
+						aac->begin(in, out);
+						if (aac->isRunning()) {
+							while(aac->loop()){}
+							aac->stop();
+						}	//else {		
+						// delay(100);
+						//}
+					}
 					start_duration = start_duration - 1;
 					disp_time(start_duration);
 				}
 				display_set();
 
-				lastmillis = millis();
+				// if(start_duration > 8 || start_duration == 1)
+				// 	goto SKIP;
 			}
 		}
 	}
