@@ -75,9 +75,11 @@ void onDataSent(const uint8_t *mac_addr, esp_now_send_status_t _status)
 	isreading = true;
 }
 
-void onDataRecv()
-{
-
+char wifi_input;
+//Receiving
+void OnDataRecv(const uint8_t* mac, const uint8_t* incomingData, int len) {
+  memcpy(&wifi_input, incomingData, sizeof(wifi_input));
+  Serial.printf("Bytes received: %c \n", wifi_input);
 }
 
 void get_timer(int _input)
@@ -272,7 +274,8 @@ void setup()
 	}
 
 	esp_now_register_send_cb(onDataSent);
-
+	esp_now_register_recv_cb(OnDataRecv);
+	
 	memcpy(peerInfo.peer_addr, broadcastAddress, 6);
 	peerInfo.channel = 0;
 	peerInfo.encrypt = false;
