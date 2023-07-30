@@ -464,16 +464,6 @@ void loop()
 					display_set();
 				} else if(datacp == 15 && timer == stop){ //reset
 					Serial.println("reset");
-
-					if (sequence < max_turn){
-						sequence++;
-					} else {
-						if(player==PAB)
-							player=PCD;
-						else if(player==PCD)
-							player=PAB;
-						sequence = 1;
-					}
 						
 					status = idle;
 
@@ -499,6 +489,25 @@ void loop()
 						aac->begin(in, out);
 				}
 				ring = false;
+			}
+			if(repeat == 3){
+				timer = stop;
+				status = idle;
+
+				if (sequence < max_turn){
+					sequence++;
+				} else {
+					if(player==PAB)
+						player=PCD;
+					else if(player==PCD)
+						player=PAB;
+					sequence = 1;
+				}
+				
+				display.clearDisplay();
+				disp_time(duration);
+				display_set();
+				break;
 			}
 		}
 	}
