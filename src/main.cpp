@@ -360,6 +360,21 @@ void loop()
 	
 	if (status == idle){
 		while(status==idle){
+
+			if(ring){
+				for (int i =0 ; i < repeat; ){
+					while (aac->isRunning()) {
+						if(!aac->loop()) {
+							aac->stop();
+							i ++;
+						}
+					}
+						delay(600);
+						in = new AudioFileSourcePROGMEM(buzzer, sizeof(buzzer));
+						aac->begin(in, out);
+				}
+				ring = false;
+			}
 			
 			reading = keypad.getKey();
 			mydata.data = reading;
