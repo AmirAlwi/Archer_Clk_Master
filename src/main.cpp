@@ -427,8 +427,12 @@ void loop()
 				check_conn();
 
 			if (isreading == false)
-				continue;
+				goto BUZ;
+
 			isreading = false;
+			if (success){
+				goto BUZ;
+			}
 
 			if(datacp == 14 || datacp == 15){
 
@@ -466,6 +470,7 @@ void loop()
 
 			}
 
+			BUZ:
 			if(ring){
 				for (int i =0 ; i < repeat; ){
 					while (aac->isRunning()) {
@@ -478,6 +483,7 @@ void loop()
 						in = new AudioFileSourcePROGMEM(buzzer, sizeof(buzzer));
 						aac->begin(in, out);
 				}
+				ring = false;
 			}
 		}
 	}
