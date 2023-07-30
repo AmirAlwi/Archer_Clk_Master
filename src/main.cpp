@@ -50,9 +50,8 @@ int status = idle;
 int success = 1;
 
 unsigned long ref_time = 0, lastmillis= 0;
-int start_duration = 10;
 int timer = reset;
-int duration = 0, countdown = 0;
+int duration = 0;
 bool isreading = false;
 
 char keys[ROW][COLUMN] = {
@@ -76,9 +75,15 @@ void onDataSent(const uint8_t *mac_addr, esp_now_send_status_t _status)
 }
 
 char wifi_input;
+int repeat = 0;
+int ring = false;
 //Receiving
 void OnDataRecv(const uint8_t* mac, const uint8_t* incomingData, int len) {
   memcpy(&wifi_input, incomingData, sizeof(wifi_input));
+  if (wifi_input >= '0' && wifi_input <= '4'){
+  	repeat = wifi_input - '0';
+	ring = true;
+  }
   Serial.printf("Bytes received: %c \n", wifi_input);
 }
 
@@ -340,12 +345,13 @@ void check_conn()
 	isreading = false;
 	
 	display.clearDisplay();
-	disp_time(countdown);
+	disp_time(duration);
 	display_set();
 	ref_time = millis()	;
 }
 
-unsigned long rt = 0;
+int sequence = 2;
+const int max_turn = 2;
 void loop()
 {
   // read the state of the switch into a local variable:
@@ -361,6 +367,7 @@ void loop()
 
 			if(reading){
 				ref_time = millis();
+				Serial.println(reading);
 				esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *)&mydata, sizeof(mydata)); 	
 			}
 
@@ -376,7 +383,6 @@ void loop()
 
 			if(datacp >= 1 && datacp <= 6){ //timer
 				get_timer(datacp);
-				countdown = duration;   
 			}
 
 			if (datacp >= 7 && datacp <= 13){
@@ -391,19 +397,17 @@ void loop()
 					break;
 				} else if(datacp == 15){ //reset
 					duration = 0;
-					countdown = 0;
-					start_duration = 10;
+					sequence = 2;
 				}
 			}
 
 			END:
 			display.clearDisplay();
-			disp_time(countdown);
+			disp_time(duration);
 			display_set();
 		}
 
 	}else if (status == busy){
-		lastmillis = millis();
 
 		display.clearDisplay();
 		disp_time(duration);
@@ -419,16 +423,12 @@ void loop()
 				ref_time = millis();
 			}
 
-			if (reading == 0 && (millis() - ref_time) > 5000 && start_duration < 0)
+			if (reading == 0 && (millis() - ref_time) > 5000)
 				check_conn();
 
 			if (isreading == false)
-				goto TIMER;
-
+				continue;
 			isreading = false;
-			if (success){
-				goto TIMER;
-			}
 
 			if(datacp == 14 || datacp == 15){
 
@@ -445,79 +445,39 @@ void loop()
 					display_set();
 				} else if(datacp == 15 && timer == stop){ //reset
 					Serial.println("reset");
-					if(player==PAB)
-						player=PCD;
-					else if(player==PCD)
-						player=PAB;
+
+					if (sequence < max_turn){
+						sequence++;
+					} else {
+						if(player==PAB)
+							player=PCD;
+						else if(player==PCD)
+							player=PAB;
+						sequence = 1;
+					}
 						
 					status = idle;
 
-					countdown = duration;
-					start_duration = 10;
 					display.clearDisplay();
-					disp_time(countdown);
+					disp_time(duration);
 					display_set();
 					break;
 				}
 
 			}
-			
-			TIMER:
-			if ((timer == start )&& (millis()-lastmillis >= 1000)){
 
-				lastmillis = millis();
-				if (countdown < 1){	
-					for (int i =0 ; i <3; ){
-						while (aac->isRunning()) {
-							if(!aac->loop()) {
-								aac->stop();
-								i ++;
-							}
-						}	//else {		
-							delay(600);
-							in = new AudioFileSourcePROGMEM(buzzer, sizeof(buzzer));
-							aac->begin(in, out);
-						//}
+			if(ring){
+				for (int i =0 ; i < repeat; ){
+					while (aac->isRunning()) {
+						if(!aac->loop()) {
+							aac->stop();
+							i ++;
+						}
 					}
-					aac->stop();
-					timer = stop;
-					status = idle;
-					countdown = duration;
-					start_duration = 10;
-					
-					if(player==PAB)
-						player=PCD;
-					else if(player==PCD)
-						player=PAB;
-
-					display.clearDisplay();
-					disp_time(countdown);
-					display_set();
-					break;
-				}
-				SKIP:
-				display.clearDisplay();
-				if (start_duration < 1){
-					countdown = countdown - 1;
-					disp_time(countdown);
-				} else {
-					if(start_duration > 8 || start_duration == 1){
+						delay(600);
 						in = new AudioFileSourcePROGMEM(buzzer, sizeof(buzzer));
 						aac->begin(in, out);
-						if (aac->isRunning()) {
-							while(aac->loop()){}
-							aac->stop();
-						}	//else {		
-						// delay(100);
-						//}
-					}
-					start_duration = start_duration - 1;
-					disp_time(start_duration);
 				}
-				display_set();
-
-				// if(start_duration > 8 || start_duration == 1)
-				// 	goto SKIP;
 			}
 		}
 	}
