@@ -490,10 +490,11 @@ void loop()
 				}
 				ring = false;
 			}
+
 			if(repeat == 3){
 				timer = stop;
 				status = idle;
-
+				repeat = 0;
 				if (sequence < max_turn){
 					sequence++;
 				} else {
@@ -503,7 +504,7 @@ void loop()
 						player=PAB;
 					sequence = 1;
 				}
-				
+
 				display.clearDisplay();
 				disp_time(duration);
 				display_set();
